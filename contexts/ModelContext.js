@@ -27,7 +27,6 @@ export function ModelProvider({ children }) {
         </ModelContext.Provider>
     );
 }
-
 // Custom hook for using the context
 export function useModelContext() {
     const context = useContext(ModelContext);

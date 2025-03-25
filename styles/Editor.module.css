@@ -201,3 +201,28 @@
 .editModeButton.active:hover {
     background-color: #dd6b20;
 }
+
+/* Style for the new Continue button */
+.continueButton {
+    background-color: #38a169;
+    /* Green background */
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 16px;
+    /* Space from the edit mode button */
+    transition: background-color 0.2s;
+    font-weight: bold;
+}
+
+.continueButton:hover {
+    background-color: #2f855a;
+    /* Darker green on hover */
+}
+
+.continueButton:disabled {
+    background-color: #999;
+    cursor: not-allowed;
+}

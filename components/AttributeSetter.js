@@ -6,11 +6,12 @@ import * as THREE from 'three';
  * UI component for naming and setting a custom attribute on selected vertices.
  * @param {React.RefObject<THREE.Mesh>} targetMeshRef - Ref pointing to the target mesh.
  * @param {Set<number>} selectedIndices - Set of selected vertex indices.
- * @param {function} [onAttributeSet] - Optional callback after attribute is set.
+ * @param {() => void} onAttributeSetSuccess - Callback function when an attribute is successfully set.
  */
-function AttributeSetter({ targetMeshRef, selectedIndices, onAttributeSet }) {
+function AttributeSetter({ targetMeshRef, selectedIndices, onAttributeSetSuccess }) {
     const [attributeName, setAttributeName] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [feedback, setFeedback] = useState('');
 
     const handleSetAttribute = async () => {
         const mesh = targetMeshRef.current;
@@ -67,9 +68,12 @@ function AttributeSetter({ targetMeshRef, selectedIndices, onAttributeSet }) {
 
             // --- Cleanup & Callback ---
             setAttributeName('');
-            if (onAttributeSet) {
-                onAttributeSet(finalAttributeName); // Notify parent if needed
+            if (onAttributeSetSuccess) {
+                onAttributeSetSuccess();
             }
+
+            // Optional: Clear feedback after a delay
+            setTimeout(() => setFeedback(''), 3000);
 
         } catch (error) {
             console.error("Error setting attribute:", error);

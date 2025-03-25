@@ -50,8 +50,9 @@ export default function Editor() {
     const [isClient, setIsClient] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const targetMeshRef = useRef(); // Create a ref to hold the target mesh
-    const modelMeshRef = useRef(); // Ref to be populated by the Model component
+    const modelMeshRef = useRef(null); // Ref to be populated by the Model component
     const [selectedIndices, setSelectedIndices] = useState(new Set()); // Lifted state
+    const [hasAttributesSet, setHasAttributesSet] = useState(false); // State to track if attributes are set
 
     useEffect(() => {
         setIsClient(true);
@@ -64,7 +65,19 @@ export default function Editor() {
 
     // Handle going back to the upload page
     const handleBack = () => {
-        router.push('/');
+        clearModel(); // Clear model data from context
+        router.push('/'); // Navigate back to the home page
+    };
+
+    // Handler for the new button
+    const handleContinueToAnimation = () => {
+        // Navigate to the new animation page
+        router.push('/animation');
+    };
+
+    // Callback for AttributeSetter
+    const handleAttributeSetSuccess = () => {
+        setHasAttributesSet(true); // Update state when an attribute is set
     };
 
     // If no model data, redirect to home page
@@ -101,6 +114,16 @@ export default function Editor() {
                     >
                         {editMode ? 'View Mode' : 'Edit Mode (Lasso)'}
                     </button>
+
+                    {/* Conditionally render the Continue button */}
+                    {hasAttributesSet && (
+                        <button
+                            className={styles.continueButton} // Add a style for this button
+                            onClick={handleContinueToAnimation}
+                        >
+                            Continue to Animation
+                        </button>
+                    )}
                 </div>
 
                 <div className={styles.sceneContainer}>
@@ -119,7 +142,7 @@ export default function Editor() {
                         <Model url={modelData.modelUrl} ref={modelMeshRef} />
 
                         {/* Conditionally render LassoController when in edit mode */}
-                        {editMode && (
+                        {editMode && modelMeshRef.current && ( // Ensure meshRef is current
                             <LassoController
                                 targetMeshRef={modelMeshRef}
                                 selectedIndices={selectedIndices}
@@ -127,11 +150,13 @@ export default function Editor() {
                             />
                         )}
 
-                        {/* Render the new AttributeSetter component */}
-                        {modelMeshRef.current && selectedIndices.size > 0 && (
+                        {/* Render the AttributeSetter component */}
+                        {/* Pass the success callback */}
+                        {editMode && modelMeshRef.current && selectedIndices.size > 0 && (
                             <AttributeSetter
                                 targetMeshRef={modelMeshRef}
                                 selectedIndices={selectedIndices}
+                                onAttributeSetSuccess={handleAttributeSetSuccess} // Pass the callback
                             />
                         )}
 
