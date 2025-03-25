@@ -48,23 +48,28 @@ function AttributeSetter({ targetMeshRef, selectedIndices, onAttributeSetSuccess
         setIsProcessing(true);
 
         try {
-            // --- 1. Update mesh.userData.vertexGroups (NEW) ---
+            // --- 1. Update mesh.userData.vertexGroups (Corrected Structure) ---
             if (!mesh.userData) { mesh.userData = {}; } // Ensure userData exists
             mesh.userData.vertexGroups = mesh.userData.vertexGroups || {}; // Initialize if needed
 
+            // Ensure the array for this specific group name exists
+            const groupKey = sanitizedName; // Use the sanitized name as the key
+            mesh.userData.vertexGroups[groupKey] = mesh.userData.vertexGroups[groupKey] || [];
+
+            // Add each selected index to the array for this group name
             selectedIndices.forEach(index => {
                 // Ensure the index is valid before using it
                 if (index < mesh.geometry.attributes.position.count) {
-                    mesh.userData.vertexGroups[index] = mesh.userData.vertexGroups[index] || []; // Initialize array for this index if needed
-                    // Add the group name if it's not already there
-                    if (!mesh.userData.vertexGroups[index].includes(sanitizedName)) {
-                        mesh.userData.vertexGroups[index].push(sanitizedName);
+                    // Add the index to the array if it's not already there (optional check)
+                    if (!mesh.userData.vertexGroups[groupKey].includes(index)) {
+                        mesh.userData.vertexGroups[groupKey].push(index);
                     }
                 } else {
                     console.warn(`AttributeSetter: Index ${index} out of bounds, skipping for userData.`);
                 }
             });
-            console.log(`Updated mesh.userData.vertexGroups for ${selectedIndices.size} vertices with group "${sanitizedName}".`);
+            console.log(`Updated mesh.userData.vertexGroups for group "${groupKey}" with ${selectedIndices.size} vertices.`);
+            // --- End of Corrected Structure Update ---
 
 
             // --- 2. Prepare and Set Geometry Attribute (Optional - Keep if needed elsewhere) ---

@@ -2,14 +2,15 @@
 import { useEffect, useState, useRef, forwardRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, useGLTF } from '@react-three/drei';
 import { useModelContext } from '../contexts/ModelContext';
 import styles from '../styles/Editor.module.css';
 import LassoController from '../components/LassoController';
 import AttributeSetter from '../components/AttributeSetter';
 import * as THREE from 'three'; // Ensure THREE is imported
-import { sampleVertexPositions } from '../utils/samplingUtils'; // Import the sampling utility
+import { useSkeletonGenerator } from '../hooks/useSkeletonGenerator'; // Import the custom hook
+import AnimationPromptUI from '../components/AnimationPromptUI'; // Import the prompt UI component
 
 // Modify Model component to accept and forward a ref
 const Model = forwardRef(({ url }, ref) => { // Use forwardRef
@@ -87,15 +88,29 @@ Model.displayName = 'Model'; // Add display name for DevTools
 
 export default function Editor() {
     const router = useRouter();
-    const { modelData, clearModel, storeGroupedVertexData, storeModelGeometry } = useModelContext();
+    const { modelData, clearModel /*, storeGroupedVertexData, storeModelGeometry */ } = useModelContext();
     const [isClient, setIsClient] = useState(false);
     const [editMode, setEditMode] = useState(false);
-    const targetMeshRef = useRef(); // Create a ref to hold the target mesh
     const modelMeshRef = useRef(null); // Ref to be populated by the Model component
-    const [selectedIndices, setSelectedIndices] = useState(new Set()); // Lifted state
-    const [hasAttributesSet, setHasAttributesSet] = useState(false); // State to track if attributes are set
-    const [vertexGroups, setVertexGroups] = useState({});
+    const [selectedIndices, setSelectedIndices] = useState(new Set());
+    const [hasAttributesSet, setHasAttributesSet] = useState(false);
     const controlsRef = useRef(); // Ref for OrbitControls
+
+    // --- Use the Skeleton Generator Hook ---
+    const {
+        isPreparing, // Renamed from previous example for clarity
+        showPrompt,
+        prompt,
+        setPrompt,
+        isLoading: isGeneratingSkeleton, // Rename for clarity if needed
+        error: skeletonError,
+        generatedSkeleton,
+        skinnedGeometry, // Get the geometry with skinning attributes
+        prepare: prepareForAnimation, // Rename function for clarity
+        generate: generateSkeleton,
+        cancel: cancelSkeletonGeneration,
+    } = useSkeletonGenerator();
+    // --- End Hook Usage ---
 
     useEffect(() => {
         setIsClient(true);
@@ -121,84 +136,23 @@ export default function Editor() {
         };
     }, [clearModel]);
 
-    // --- Debugging: Sample and print selected vertices ---
-    useEffect(() => {
-        const mesh = modelMeshRef.current;
-        // Only sample if in edit mode, mesh exists, and there are selected vertices
-        if (editMode && mesh && selectedIndices.size > 0) {
-            try {
-                // Calculate ratio for ~10 samples. sampleVertexPositions handles edge cases.
-                const ratio = 10 / selectedIndices.size;
-                const sampledPoints = sampleVertexPositions(mesh, selectedIndices, ratio);
-                console.log(`Sampled ${sampledPoints.length} vertex world positions (target: 10):`, sampledPoints.map(v => ({ x: v.x, y: v.y, z: v.z }))); // Log cleaner objects
-            } catch (error) {
-                console.error("Error sampling vertex positions:", error);
-            }
-        }
-    }, [selectedIndices, editMode]); // Re-run when selection or editMode changes
-    // --- End of Debugging ---
-
     // Handle going back to the upload page
     const handleBack = () => {
         clearModel(); // Clear model data from context
         router.push('/'); // Navigate back to the home page
     };
 
-    // Handler for the new button
-    const handleContinueToAnimation = () => {
+    // --- Update the button handler to use the hook's prepare function ---
+    const handlePrepareClick = () => {
         const mesh = modelMeshRef.current;
-
-        // --- 1. Validation ---
-        if (!mesh || !mesh.geometry || !mesh.geometry.attributes.position) {
-            console.error("Cannot continue: Mesh or geometry position data is missing.");
-            alert("Error: Model mesh data is not available.");
-            return;
+        if (mesh) {
+            // Call the prepare function from the hook
+            prepareForAnimation(mesh);
+            // The hook will set showPrompt to true on success
+        } else {
+            console.error("Prepare Button: Target mesh ref is not current.");
+            alert("Error: Model mesh not loaded correctly.");
         }
-        // Ensure vertexGroups are derived from mesh.userData for consistency
-        const currentVertexGroups = mesh.userData?.vertexGroups || {};
-        if (Object.keys(currentVertexGroups).length === 0) {
-            console.error("Cannot continue: No vertex groups defined.");
-            alert("Error: Please define at least one vertex group using the Attribute Setter.");
-            return;
-        }
-
-        // --- 2. Collect Indices and Calculate World Positions ---
-        console.log("Calculating world positions for grouped vertices...");
-        const vertexDataForContext = [];
-        const processedIndices = new Set(); // Avoid processing the same index multiple times
-        const positionAttribute = mesh.geometry.attributes.position;
-        const vertex = new THREE.Vector3();
-        mesh.updateMatrixWorld(); // Ensure world matrix is up-to-date
-
-        // Use currentVertexGroups from mesh.userData
-        for (const indexStr in currentVertexGroups) {
-            const vertexIndex = parseInt(indexStr, 10);
-            // Check bounds and if already processed
-            if (!isNaN(vertexIndex) && vertexIndex >= 0 && vertexIndex < positionAttribute.count && !processedIndices.has(vertexIndex)) {
-                processedIndices.add(vertexIndex); // Mark as processed
-
-                // Calculate world position
-                vertex.fromBufferAttribute(positionAttribute, vertexIndex);
-                vertex.applyMatrix4(mesh.matrixWorld);
-
-                // Store plain object for context
-                vertexDataForContext.push({
-                    index: vertexIndex,
-                    position: { x: vertex.x, y: vertex.y, z: vertex.z }
-                });
-            }
-        }
-
-        // --- 3. Store Data in Context ---
-        console.log(`Storing ${vertexDataForContext.length} grouped vertex data points in context.`);
-        storeGroupedVertexData(vertexDataForContext);
-
-        console.log("Storing mesh geometry in context.");
-        storeModelGeometry(mesh.geometry); // Store the geometry
-
-        // --- 4. Navigate ---
-        console.log("Navigating to animation page...");
-        router.push('/animation');
     };
 
     // Callback for AttributeSetter
@@ -237,20 +191,35 @@ export default function Editor() {
                     <button
                         className={`${styles.editModeButton} ${editMode ? styles.active : ''}`}
                         onClick={() => setEditMode(!editMode)}
+                        disabled={showPrompt || isGeneratingSkeleton || isPreparing} // Disable while prompting/generating/preparing
                     >
                         {editMode ? 'View Mode' : 'Edit Mode (Lasso)'}
                     </button>
 
-                    {/* Conditionally render the Continue button */}
+                    {/* Conditionally render the Prepare/Animate button */}
                     {hasAttributesSet && (
                         <button
-                            className={styles.continueButton} // Add a style for this button
-                            onClick={handleContinueToAnimation}
+                            className={styles.continueButton} // Reuse style
+                            onClick={handlePrepareClick} // Use the updated handler
+                            disabled={showPrompt || isGeneratingSkeleton || isPreparing} // Disable if prompt is open or busy
                         >
-                            Continue to Animation
+                            {isPreparing ? 'Preparing...' : 'Prepare for Animation'}
                         </button>
                     )}
                 </div>
+
+                {/* --- Conditionally render the Animation Prompt UI --- */}
+                {showPrompt && (
+                    <AnimationPromptUI
+                        prompt={prompt}
+                        onPromptChange={setPrompt}
+                        onGenerate={generateSkeleton}
+                        onCancel={cancelSkeletonGeneration}
+                        isLoading={isGeneratingSkeleton}
+                        error={skeletonError}
+                    />
+                )}
+                {/* --- End Animation Prompt UI --- */}
 
                 <div className={styles.sceneContainer}>
                     <Canvas
@@ -268,7 +237,7 @@ export default function Editor() {
                         <Model url={modelData.modelUrl} ref={modelMeshRef} />
 
                         {/* Conditionally render LassoController when in edit mode */}
-                        {editMode && modelMeshRef.current && ( // Ensure meshRef is current
+                        {editMode && !showPrompt && modelMeshRef.current && ( // Ensure meshRef is current
                             <LassoController
                                 targetMeshRef={modelMeshRef}
                                 selectedIndices={selectedIndices}
@@ -277,8 +246,7 @@ export default function Editor() {
                         )}
 
                         {/* Render the AttributeSetter component */}
-                        {/* Pass the success callback */}
-                        {editMode && modelMeshRef.current && selectedIndices.size > 0 && (
+                        {editMode && !showPrompt && modelMeshRef.current && selectedIndices.size > 0 && (
                             <AttributeSetter
                                 targetMeshRef={modelMeshRef}
                                 selectedIndices={selectedIndices}
@@ -286,10 +254,19 @@ export default function Editor() {
                             />
                         )}
 
+                        {/* --- Render Skeleton Helper --- */}
+                        {generatedSkeleton && <SkeletonVisualizer skeleton={generatedSkeleton} />}
+                        {/* --- End Skeleton Helper --- */}
+
                         <OrbitControls
+                            ref={controlsRef} // Make sure you have a ref if you need to interact with controls directly
                             enableDamping
                             dampingFactor={0.1}
-                            enabled={!editMode} // Disable orbit controls in edit mode
+                            // This condition should work correctly:
+                            // Controls are enabled ONLY IF:
+                            // - Not in editMode AND
+                            // - The prompt is not currently shown
+                            enabled={!editMode && !showPrompt}
                         />
                         <Environment preset="sunset" />
                         <gridHelper args={[10, 10]} />
@@ -316,7 +293,63 @@ export default function Editor() {
                         </div>
                     </div>
                 </div>
+
+                {/* Optional: Display skeleton info */}
+                {generatedSkeleton && !isGeneratingSkeleton && !showPrompt && (
+                    <div className={styles.results}> {/* Reuse or create style */}
+                        <h4>Skeleton Generated</h4>
+                        <p>Skeleton with {generatedSkeleton.bones.length} bones created.</p>
+                        {/* Displaying skinnedGeometry info might be too verbose */}
+                    </div>
+                )}
             </main>
         </div>
     );
 }
+
+// Helper component to render the skeleton (can stay the same or be simplified)
+const SkeletonVisualizer = ({ skeleton }) => {
+    const helperRef = useRef();
+
+    useEffect(() => {
+        // Clean up previous helper (optional, primitive handles removal)
+        // if (helperRef.current && helperRef.current.parent) {
+        //     helperRef.current.parent.remove(helperRef.current);
+        // }
+        // Always reset the ref at the start of the effect
+        helperRef.current = null;
+
+        if (skeleton && skeleton.bones.length > 0) {
+            // Find a suitable object for the helper (e.g., the root bone's parent or the first bone)
+            const rootObject = skeleton.bones[0].parent || skeleton.bones[0];
+            if (rootObject && rootObject.isObject3D) { // Add check if rootObject is valid Object3D
+                try {
+                    helperRef.current = new THREE.SkeletonHelper(rootObject);
+                    helperRef.current.material.linewidth = 2;
+                    console.log("SkeletonVisualizer: Created helper for", rootObject);
+                } catch (error) {
+                    console.error("SkeletonVisualizer: Error creating SkeletonHelper:", error);
+                    helperRef.current = null; // Ensure ref is null on error
+                }
+            } else {
+                console.warn("SkeletonVisualizer: Could not find valid root object for SkeletonHelper.");
+                // helperRef.current is already null from the start of useEffect
+            }
+        } else {
+            // Skeleton is null or has no bones
+            // helperRef.current is already null from the start of useEffect
+            console.log("SkeletonVisualizer: No valid skeleton provided.");
+        }
+    }, [skeleton]); // Dependency remains skeleton
+
+    // Use useFrame to ensure the helper is updated if the skeleton/bones animate later
+    useFrame(() => {
+        // Check if helperRef.current exists and has an update method before calling
+        if (helperRef.current && typeof helperRef.current.update === 'function') {
+            helperRef.current.update();
+        }
+    }); // Removed the line number causing the error in the log
+
+    // Return the primitive if the helper exists
+    return helperRef.current ? <primitive object={helperRef.current} /> : null;
+};
