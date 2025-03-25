@@ -9,6 +9,7 @@ import styles from '../styles/Editor.module.css';
 import LassoController from '../components/LassoController';
 import AttributeSetter from '../components/AttributeSetter';
 import * as THREE from 'three'; // Ensure THREE is imported
+import { sampleVertexPositions } from '../utils/samplingUtils'; // Import the sampling utility
 
 // Modify Model component to accept and forward a ref
 const Model = forwardRef(({ url }, ref) => { // Use forwardRef
@@ -17,8 +18,45 @@ const Model = forwardRef(({ url }, ref) => { // Use forwardRef
 
     // Find the first mesh and assign it to the forwarded ref
     useEffect(() => {
-        let foundMesh = null;
+        if (!scene) return; // Guard against scene not being loaded yet
+
+        // --- Calculate Bounding Box and Reposition ---
+        scene.updateMatrixWorld(true); // Ensure world matrices are up-to-date before calculation
+        const modelBoundingBox = new THREE.Box3();
+
         scene.traverse((node) => {
+            if (node.isMesh) {
+                // Ensure geometry bounding box is computed
+                if (!node.geometry.boundingBox) {
+                    node.geometry.computeBoundingBox();
+                }
+                if (node.geometry.boundingBox) { // Check if boundingBox exists
+                    const meshWorldBoundingBox = node.geometry.boundingBox.clone();
+                    meshWorldBoundingBox.applyMatrix4(node.matrixWorld); // Transform to world space
+                    modelBoundingBox.union(meshWorldBoundingBox); // Correct method: union
+                } else {
+                    console.warn(`Mesh "${node.name}" has no bounding box.`);
+                }
+            }
+        });
+
+        // Check if the bounding box is valid (not empty)
+        if (!modelBoundingBox.isEmpty()) {
+            // Calculate the vertical offset needed to place the lowest point at Y=0
+            const offsetY = -modelBoundingBox.min.y;
+
+            // Apply the offset to the root scene object
+            scene.position.y += offsetY; // Adjust current position
+            scene.updateMatrixWorld(true); // IMPORTANT: Update world matrix *after* position change
+            console.log(`Model adjusted by offsetY: ${offsetY}`);
+        } else {
+            console.warn("Could not calculate model bounding box for repositioning.");
+        }
+        // --- End of Repositioning Logic ---
+
+        // --- Find Mesh and Assign Ref (Now uses original positioning relative to adjusted scene) ---
+        let foundMesh = null;
+        scene.traverse((node) => { // Traverse the scene with its original positioning
             if (!foundMesh && node.isMesh) {
                 console.log('Model Component: Found mesh:', node.name);
                 foundMesh = node;
@@ -31,17 +69,19 @@ const Model = forwardRef(({ url }, ref) => { // Use forwardRef
         // Assign to internal ref for potential direct use if needed
         meshRef.current = foundMesh;
 
-        // Log model information
-        scene.traverse((node) => {
-            if (node.isMesh) {
-                // console.log('Mesh found:', node.name); // Already logged above
-            }
-        });
-    }, [scene, ref]);
+        // Log model information (optional)
+        // scene.traverse((node) => {
+        //     if (node.isMesh) {
+        //         // console.log('Mesh found:', node.name);
+        //     }
+        // });
+
+    }, [scene, ref, url]); // Dependencies remain the same
 
     // Use the internal ref for the primitive object if needed,
     // but the main goal here is to populate the forwarded ref.
-    return <primitive object={scene} scale={[1, 1, 1]} position={[0, 0, 0]} /* ref={meshRef} - Optional internal ref usage */ />;
+    // The scene object itself is already repositioned before rendering.
+    return <primitive object={scene} scale={[1, 1, 1]} /* position is now handled by the scene object itself */ />;
 });
 Model.displayName = 'Model'; // Add display name for DevTools
 
@@ -65,6 +105,38 @@ export default function Editor() {
             // Don't clear immediately as we might be navigating within the app
         };
     }, []);
+
+    // Redirect if no model data
+    useEffect(() => {
+        if (!modelData?.loaded) {
+            router.push('/');
+        }
+    }, [modelData, router]);
+
+    // Clear context on unmount
+    useEffect(() => {
+        return () => {
+            // Optional: Decide if you want to clear model data when leaving editor
+            // clearModel();
+        };
+    }, [clearModel]);
+
+    // --- Debugging: Sample and print selected vertices ---
+    useEffect(() => {
+        const mesh = modelMeshRef.current;
+        // Only sample if in edit mode, mesh exists, and there are selected vertices
+        if (editMode && mesh && selectedIndices.size > 0) {
+            try {
+                // Calculate ratio for ~10 samples. sampleVertexPositions handles edge cases.
+                const ratio = 10 / selectedIndices.size;
+                const sampledPoints = sampleVertexPositions(mesh, selectedIndices, ratio);
+                console.log(`Sampled ${sampledPoints.length} vertex world positions (target: 10):`, sampledPoints.map(v => ({ x: v.x, y: v.y, z: v.z }))); // Log cleaner objects
+            } catch (error) {
+                console.error("Error sampling vertex positions:", error);
+            }
+        }
+    }, [selectedIndices, editMode]); // Re-run when selection or editMode changes
+    // --- End of Debugging ---
 
     // Handle going back to the upload page
     const handleBack = () => {

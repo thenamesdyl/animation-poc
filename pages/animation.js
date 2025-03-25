@@ -62,7 +62,7 @@ export default function AnimationPage() {
         try {
             // --- 2. Sample Precomputed Positions ---
             const samplingRatio = 0.5; // 50%
-            const maxSamples = 5000; // Max 5000 vertices
+            const maxSamples = 10; // Max 5000 vertices
             console.log(`Sampling ${samplingRatio * 100}% of ${groupedVertexData.length} precomputed vertices, up to a max of ${maxSamples}...`);
             const sampledPositions = samplePrecomputedPositions(groupedVertexData, samplingRatio, maxSamples);
 

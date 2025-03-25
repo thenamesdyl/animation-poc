@@ -60,8 +60,9 @@ The user wants to animate this region with the following description:
 Based on the vertex sample and the desired animation, provide **exactly 4** suggested 3D joint locations in the specified JSON format.
 `;
 
+    console.log("user message content", userMessageContent);
     const requestBody = {
-        model: "claude-3-5-sonnet-20240620",
+        model: "claude-3-7-sonnet-20250219",
         max_tokens: 4096, // Keep increased limit
         system: systemPrompt,
         messages: [{ role: "user", content: userMessageContent }]

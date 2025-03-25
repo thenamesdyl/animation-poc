@@ -1,6 +1,6 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Stats } from '@react-three/drei';
+import { OrbitControls, Stats, GridHelper } from '@react-three/drei';
 import * as THREE from 'three';
 
 /**
@@ -13,10 +13,10 @@ function SkinnedModelViewer({ geometry, skeleton }) {
     const skinnedMeshRef = useRef();
 
     // Memoize the creation of the SkinnedMesh, material, and helper
-    const { skinnedMesh, skeletonHelper } = useMemo(() => { // Destructure helper as well
+    const { skinnedMesh, skeletonHelper } = useMemo(() => {
         if (!geometry || !skeleton || !skeleton.bones || skeleton.bones.length === 0) {
             console.log("SkinnedModelViewer: Waiting for geometry and skeleton...");
-            return { skinnedMesh: null, skeletonHelper: null }; // Return object
+            return { skinnedMesh: null, skeletonHelper: null };
         }
 
         console.log("SkinnedModelViewer: Creating SkinnedMesh and SkeletonHelper...");
@@ -48,33 +48,57 @@ function SkinnedModelViewer({ geometry, skeleton }) {
 
         console.log("SkinnedModelViewer: SkinnedMesh and SkeletonHelper created.", mesh, helper);
 
-        return { skinnedMesh: mesh, skeletonHelper: helper }; // Return both
-
+        return { skinnedMesh: mesh, skeletonHelper: helper };
     }, [geometry, skeleton]);
 
+    // --- Add useEffect for position adjustment ---
+    /* // Remove or comment out this entire useEffect block
+    useEffect(() => {
+        if (skinnedMesh && skinnedMesh.geometry) {
+            // Ensure the geometry's bounding box is computed
+            if (!skinnedMesh.geometry.boundingBox) {
+                skinnedMesh.geometry.computeBoundingBox();
+            }
+
+            if (skinnedMesh.geometry.boundingBox && !skinnedMesh.geometry.boundingBox.isEmpty()) {
+                // Calculate offset based on the geometry's local bounding box
+                const offsetY = -skinnedMesh.geometry.boundingBox.min.y;
+
+                // Apply the offset to the SkinnedMesh position
+                skinnedMesh.position.y = offsetY;
+                skinnedMesh.updateMatrixWorld(true); // Update world matrix
+                console.log(`SkinnedMesh adjusted by offsetY: ${offsetY}`);
+            } else {
+                console.warn("SkinnedModelViewer: Could not calculate geometry bounding box for repositioning.");
+            }
+        }
+    }, [skinnedMesh]); // Run this effect when skinnedMesh changes
+    */
+    // --- End of position adjustment ---
+
     if (!skinnedMesh || !skeletonHelper) {
-        return <div > Preparing skinned model... < /div>;
+        return <div>Preparing skinned model...</div>;
     }
 
-            return (
-            <div style={{ height: '400px', width: '100%', border: '1px solid #ccc', marginTop: '20px' }}>
-                <Canvas camera={{ position: [0, 1, 3], fov: 50 }}>
-                    <ambientLight intensity={0.6} />
-                    <directionalLight position={[5, 5, 5]} intensity={1.0} />
-                    <directionalLight position={[-3, -3, 2]} intensity={0.5} />
+    return (
+        <div style={{ height: '400px', width: '100%', border: '1px solid #ccc', marginTop: '20px' }}>
+            <Canvas camera={{ position: [0, 1, 3], fov: 50 }}>
+                <ambientLight intensity={0.6} />
+                <directionalLight position={[5, 5, 5]} intensity={1.0} />
+                <directionalLight position={[-3, -3, 2]} intensity={0.5} />
 
-                    {/* Render the created SkinnedMesh */}
-                    <primitive object={skinnedMesh} ref={skinnedMeshRef} />
+                {/* Render the created SkinnedMesh */}
+                <primitive object={skinnedMesh} ref={skinnedMeshRef} />
 
-                    {/* Render the SkeletonHelper */}
-                    <primitive object={skeletonHelper} />
+                {/* Render the SkeletonHelper */}
+                <primitive object={skeletonHelper} />
 
-                    <OrbitControls />
-                    <Stats />
-                    <gridHelper args={[10, 10]} />
-                </Canvas>
-            </div>
-            );
+                <OrbitControls />
+                <Stats />
+                <gridHelper args={[10, 10]} />
+            </Canvas>
+        </div>
+    );
 }
 
-            export default SkinnedModelViewer; 
+export default SkinnedModelViewer; 
