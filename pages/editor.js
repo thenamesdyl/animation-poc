@@ -6,9 +6,8 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, useGLTF } from '@react-three/drei';
 import { useModelContext } from '../contexts/ModelContext';
 import styles from '../styles/Editor.module.css';
-
-// Import the new LassoController
-import LassoController from '../components/LassoController'; // Adjust path if needed
+import LassoController from '../components/LassoController';
+import AttributeSetter from '../components/AttributeSetter';
 
 // Modify Model component to accept and forward a ref
 const Model = forwardRef(({ url }, ref) => { // Use forwardRef
@@ -51,6 +50,8 @@ export default function Editor() {
     const [isClient, setIsClient] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const targetMeshRef = useRef(); // Create a ref to hold the target mesh
+    const modelMeshRef = useRef(); // Ref to be populated by the Model component
+    const [selectedIndices, setSelectedIndices] = useState(new Set()); // Lifted state
 
     useEffect(() => {
         setIsClient(true);
@@ -70,6 +71,11 @@ export default function Editor() {
     if (isClient && !modelData?.loaded) {
         router.push('/');
         return null;
+    }
+
+    if (!modelData?.modelUrl) {
+        // Handle case where model URL is not available
+        return <div>Loading model or redirecting...</div>;
     }
 
     return (
@@ -97,58 +103,68 @@ export default function Editor() {
                     </button>
                 </div>
 
-                {isClient && modelData?.modelUrl ? (
-                    <div className={styles.canvasContainer}>
-                        <Canvas
-                            camera={{ position: [0, 2, 5], fov: 50 }}
-                            style={{ width: '100%', height: '100%' }}
-                        >
-                            <ambientLight intensity={0.5} />
-                            <directionalLight
-                                position={[10, 10, 5]}
-                                intensity={1}
-                                castShadow
+                <div className={styles.sceneContainer}>
+                    <Canvas
+                        camera={{ position: [0, 2, 5], fov: 50 }}
+                        style={{ width: '100%', height: '100%' }}
+                    >
+                        <ambientLight intensity={0.5} />
+                        <directionalLight
+                            position={[10, 10, 5]}
+                            intensity={1}
+                            castShadow
+                        />
+
+                        {/* Always render the Model, pass the ref */}
+                        <Model url={modelData.modelUrl} ref={modelMeshRef} />
+
+                        {/* Conditionally render LassoController when in edit mode */}
+                        {editMode && (
+                            <LassoController
+                                targetMeshRef={modelMeshRef}
+                                selectedIndices={selectedIndices}
+                                onSelectionChange={setSelectedIndices}
                             />
+                        )}
 
-                            {/* Always render the Model, pass the ref */}
-                            <Model url={modelData.modelUrl} ref={targetMeshRef} />
-
-                            {/* Conditionally render LassoController when in edit mode */}
-                            {editMode && <LassoController targetMeshRef={targetMeshRef} />}
-
-                            <OrbitControls
-                                enableDamping
-                                dampingFactor={0.1}
-                                enabled={!editMode} // Disable orbit controls in edit mode
+                        {/* Render the new AttributeSetter component */}
+                        {modelMeshRef.current && selectedIndices.size > 0 && (
+                            <AttributeSetter
+                                targetMeshRef={modelMeshRef}
+                                selectedIndices={selectedIndices}
                             />
-                            <Environment preset="sunset" />
-                            <gridHelper args={[10, 10]} />
-                        </Canvas>
+                        )}
 
-                        {/* Mobile touch controls */}
-                        <div className={styles.mobileControls}>
-                            {/* Left joystick for movement/steering */}
-                            <div className={styles.leftJoystick}></div>
+                        <OrbitControls
+                            enableDamping
+                            dampingFactor={0.1}
+                            enabled={!editMode} // Disable orbit controls in edit mode
+                        />
+                        <Environment preset="sunset" />
+                        <gridHelper args={[10, 10]} />
+                    </Canvas>
 
-                            {/* Right joystick for camera control */}
-                            <div className={styles.rightJoystick}></div>
+                    {/* Mobile touch controls */}
+                    <div className={styles.mobileControls}>
+                        {/* Left joystick for movement/steering */}
+                        <div className={styles.leftJoystick}></div>
 
-                            {/* Bottom arc layout for abilities */}
-                            <div className={styles.abilityButtons}>
-                                {Array(6).fill(0).map((_, i) => (
-                                    <button
-                                        key={i}
-                                        className={styles.abilityButton}
-                                    >
-                                        {i + 1}
-                                    </button>
-                                ))}
-                            </div>
+                        {/* Right joystick for camera control */}
+                        <div className={styles.rightJoystick}></div>
+
+                        {/* Bottom arc layout for abilities */}
+                        <div className={styles.abilityButtons}>
+                            {Array(6).fill(0).map((_, i) => (
+                                <button
+                                    key={i}
+                                    className={styles.abilityButton}
+                                >
+                                    {i + 1}
+                                </button>
+                            ))}
                         </div>
                     </div>
-                ) : (
-                    <div className={styles.loading}>Loading...</div>
-                )}
+                </div>
             </main>
         </div>
     );

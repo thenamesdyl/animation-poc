@@ -36,9 +36,20 @@
 }
 
 .sceneContainer {
-    flex: 1;
+    flex-grow: 1;
+    width: 85vw;
+    height: 85vh;
     position: relative;
+    border: 1px solid #ccc;
+    margin: 20px auto;
     overflow: hidden;
+}
+
+/* Ensure canvas fills the updated container size */
+.sceneContainer>canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 /* Controls for mobile */
@@ -52,6 +63,7 @@
     box-sizing: border-box;
     pointer-events: none;
     z-index: 10;
+    flex-shrink: 0;
 }
 
 .joystick {
