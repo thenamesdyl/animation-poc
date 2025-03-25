@@ -7,6 +7,7 @@ import { useModelContext } from '../contexts/ModelContext'; // Import context ho
 import { samplePrecomputedPositions } from '../utils/samplingUtils';
 import { createAndBindSkeleton } from '../utils/riggingUtils'; // Import the new rigging utility
 import * as THREE from 'three'; // Import THREE
+import SkinnedModelViewer from '../components/SkinnedModelViewer'; // Import the new component
 
 export default function AnimationPage() {
     const router = useRouter();
@@ -100,24 +101,22 @@ export default function AnimationPage() {
             console.log("Backend Response (Suggested Joints):", joints);
             setSuggestedJoints(joints); // Store raw joint suggestions
 
-            // --- 5. Create Skeleton and Bind to Geometry ---
-            console.log("Attempting to create skeleton and bind to geometry...");
-            // Ensure modelGeometry is available (already checked, but good practice)
+            // --- 5. Create Skeleton and Bind Attributes to Geometry ---
+            console.log("Attempting to create skeleton and bind attributes to geometry...");
             if (modelGeometry && joints && joints.length > 0) {
-                // The function modifies modelGeometry in place by adding attributes
+                // createAndBindSkeleton modifies modelGeometry in place
                 const createdSkeleton = createAndBindSkeleton(modelGeometry, joints);
 
                 if (createdSkeleton) {
                     setSkeleton(createdSkeleton); // Store the created skeleton in state
-                    console.log("Successfully created and bound skeleton:", createdSkeleton);
-                    alert(`Successfully received ${joints.length} joint suggestions and created a skeleton!`);
-                    // Now modelGeometry has skinIndex/skinWeight attributes, and we have the skeleton.
-                    // The next step would be to create a SkinnedMesh using modelGeometry and the skeleton.
+                    console.log("Successfully created skeleton. Geometry attributes updated.", createdSkeleton);
+                    // No alert here, rely on the viewer appearing
+                    // The SkinnedMesh will now be created by the SkinnedModelViewer component
                 } else {
-                    throw new Error("Failed to create or bind the skeleton.");
+                    throw new Error("Failed to create skeleton or bind attributes.");
                 }
             } else {
-                throw new Error("Missing geometry or joint data needed to create skeleton.");
+                throw new Error("Missing geometry or joint data needed for skeleton creation.");
             }
 
         } catch (err) {
@@ -163,25 +162,25 @@ export default function AnimationPage() {
                         // Disable if geometry is missing
                         disabled={!animationPrompt.trim() || isLoading || !groupedVertexData || groupedVertexData.length === 0 || !modelGeometry}
                     >
-                        {isLoading ? 'Generating...' : 'Generate Joint Suggestions & Skeleton'}
+                        {isLoading ? 'Generating...' : 'Generate Skeleton & Preview'}
                     </button>
                     {isLoading && <p className={styles.loadingText}>Processing request, please wait...</p>}
                     {error && <p className={styles.errorText}>Error: {error}</p>}
-                    {/* Display info about the created skeleton */}
-                    {skeleton && (
-                        <div className={styles.results}>
-                            <h4>Skeleton Created</h4>
-                            <p>A skeleton with {skeleton.bones.length} bones has been generated and bound to the model geometry.</p>
-                            {/* You could add more details here, maybe visualize the bones later */}
-                            <pre>{JSON.stringify(suggestedJoints, null, 2)}</pre>
+
+                    {/* Conditionally render the SkinnedModelViewer */}
+                    {modelGeometry && skeleton && !isLoading && !error && (
+                        <div className={styles.viewerContainer}> {/* Optional: Add styling */}
+                            <h4>Skinned Model Preview</h4>
+                            <SkinnedModelViewer geometry={modelGeometry} skeleton={skeleton} />
                         </div>
                     )}
-                    {/* Keep suggestedJoints display if needed for debugging, even if skeleton fails */}
-                    {!skeleton && suggestedJoints && (
+
+                    {/* Display info (optional, can be removed if viewer is enough) */}
+                    {skeleton && !isLoading && (
                         <div className={styles.results}>
-                            <h4>Joint Suggestions Received</h4>
-                            <p>Received {suggestedJoints.length} joint suggestions, but failed to create/bind skeleton.</p>
-                            <pre>{JSON.stringify(suggestedJoints, null, 2)}</pre>
+                            <h4>Skeleton Details</h4>
+                            <p>Skeleton with {skeleton.bones.length} bones generated.</p>
+                            <pre>Joint Positions: {JSON.stringify(suggestedJoints, null, 2)}</pre>
                         </div>
                     )}
                 </div>
