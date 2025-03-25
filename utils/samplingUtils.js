@@ -70,4 +70,76 @@ export function sampleVertexPositions(mesh, selectedIndices, samplingRatio) {
 
     console.log(`Sampled ${sampledPositions.length} vertex positions out of ${totalSelected} selected (Ratio: ${samplingRatio}, Target Size: ${sampleSize}).`);
     return sampledPositions;
+}
+
+/**
+ * Samples elements from an array of pre-calculated vertex data objects.
+ * Returns only the position part of the sampled elements.
+ *
+ * @param {Array<{ index: number, position: {x: number, y: number, z: number} }>} vertexDataArray - Array of vertex data objects.
+ * @param {number} samplingRatio - The fraction (0.0 to 1.0) of elements to sample.
+ * @param {number} maxCount - The maximum number of elements to return.
+ * @returns {Array<{x: number, y: number, z: number}>} An array of position objects {x, y, z}.
+ */
+export function samplePrecomputedPositions(vertexDataArray, samplingRatio, maxCount) {
+    // --- Input Validation ---
+    if (!Array.isArray(vertexDataArray) || vertexDataArray.length === 0) {
+        console.warn("samplePrecomputedPositions: vertexDataArray is empty or not an array. Returning empty array.");
+        return [];
+    }
+    if (typeof samplingRatio !== 'number' || samplingRatio < 0 || samplingRatio > 1) {
+        console.warn(`samplePrecomputedPositions: Invalid samplingRatio (${samplingRatio}). Clamping to [0, 1].`);
+        samplingRatio = Math.max(0, Math.min(1, samplingRatio));
+    }
+    if (typeof maxCount !== 'number' || maxCount <= 0) {
+        console.warn(`samplePrecomputedPositions: Invalid maxCount (${maxCount}). Using default of 1000.`);
+        maxCount = 1000;
+    }
+
+    // --- Sampling Logic ---
+    const totalAvailable = vertexDataArray.length;
+
+    // Calculate target size based on ratio, capped by totalAvailable and maxCount
+    let targetSize = Math.ceil(totalAvailable * samplingRatio);
+    targetSize = Math.min(targetSize, totalAvailable, maxCount);
+    targetSize = Math.max(0, targetSize); // Can be 0 if totalAvailable is 0
+
+    if (targetSize === 0) {
+        return [];
+    }
+
+    const sampledPositions = [];
+    const sampledInputIndices = new Set(); // Track indices *of the input array*
+
+    // Randomly select unique indices from the input array
+    let attempts = 0;
+    const maxAttempts = targetSize * 5;
+
+    while (sampledInputIndices.size < targetSize && attempts < maxAttempts) {
+        attempts++;
+        const randomIndex = Math.floor(Math.random() * totalAvailable);
+
+        if (!sampledInputIndices.has(randomIndex)) {
+            sampledInputIndices.add(randomIndex);
+            // Directly add the position object from the selected element
+            // Ensure the position object exists before adding
+            if (vertexDataArray[randomIndex]?.position) {
+                // Return plain {x, y, z} objects as needed by claudeAPI function
+                sampledPositions.push(vertexDataArray[randomIndex].position);
+                // If claudeAPI was updated to expect THREE.Vector3, convert here:
+                // const pos = vertexDataArray[randomIndex].position;
+                // sampledPositions.push(new THREE.Vector3(pos.x, pos.y, pos.z));
+            } else {
+                console.warn(`samplePrecomputedPositions: Element at index ${randomIndex} missing position data. Skipping.`);
+                // Adjust targetSize or handle this case if strict count is needed
+            }
+        }
+    }
+    if (attempts >= maxAttempts && sampledInputIndices.size < targetSize) {
+        console.warn(`samplePrecomputedPositions: Reached max attempts (${maxAttempts}) but only collected ${sampledInputIndices.size}/${targetSize} samples.`);
+    }
+
+
+    console.log(`Sampled ${sampledPositions.length} precomputed positions (Ratio: ${samplingRatio}, Max Cap: ${maxCount}, Target: ${targetSize}).`);
+    return sampledPositions; // Returns array of {x, y, z} objects
 } 

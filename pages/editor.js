@@ -8,6 +8,7 @@ import { useModelContext } from '../contexts/ModelContext';
 import styles from '../styles/Editor.module.css';
 import LassoController from '../components/LassoController';
 import AttributeSetter from '../components/AttributeSetter';
+import * as THREE from 'three'; // Ensure THREE is imported
 
 // Modify Model component to accept and forward a ref
 const Model = forwardRef(({ url }, ref) => { // Use forwardRef
@@ -46,13 +47,15 @@ Model.displayName = 'Model'; // Add display name for DevTools
 
 export default function Editor() {
     const router = useRouter();
-    const { modelData, clearModel } = useModelContext();
+    const { modelData, clearModel, storeGroupedVertexData, storeModelGeometry } = useModelContext();
     const [isClient, setIsClient] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const targetMeshRef = useRef(); // Create a ref to hold the target mesh
     const modelMeshRef = useRef(null); // Ref to be populated by the Model component
     const [selectedIndices, setSelectedIndices] = useState(new Set()); // Lifted state
     const [hasAttributesSet, setHasAttributesSet] = useState(false); // State to track if attributes are set
+    const [vertexGroups, setVertexGroups] = useState({});
+    const controlsRef = useRef(); // Ref for OrbitControls
 
     useEffect(() => {
         setIsClient(true);
@@ -71,7 +74,58 @@ export default function Editor() {
 
     // Handler for the new button
     const handleContinueToAnimation = () => {
-        // Navigate to the new animation page
+        const mesh = modelMeshRef.current;
+
+        // --- 1. Validation ---
+        if (!mesh || !mesh.geometry || !mesh.geometry.attributes.position) {
+            console.error("Cannot continue: Mesh or geometry position data is missing.");
+            alert("Error: Model mesh data is not available.");
+            return;
+        }
+        // Ensure vertexGroups are derived from mesh.userData for consistency
+        const currentVertexGroups = mesh.userData?.vertexGroups || {};
+        if (Object.keys(currentVertexGroups).length === 0) {
+            console.error("Cannot continue: No vertex groups defined.");
+            alert("Error: Please define at least one vertex group using the Attribute Setter.");
+            return;
+        }
+
+        // --- 2. Collect Indices and Calculate World Positions ---
+        console.log("Calculating world positions for grouped vertices...");
+        const vertexDataForContext = [];
+        const processedIndices = new Set(); // Avoid processing the same index multiple times
+        const positionAttribute = mesh.geometry.attributes.position;
+        const vertex = new THREE.Vector3();
+        mesh.updateMatrixWorld(); // Ensure world matrix is up-to-date
+
+        // Use currentVertexGroups from mesh.userData
+        for (const indexStr in currentVertexGroups) {
+            const vertexIndex = parseInt(indexStr, 10);
+            // Check bounds and if already processed
+            if (!isNaN(vertexIndex) && vertexIndex >= 0 && vertexIndex < positionAttribute.count && !processedIndices.has(vertexIndex)) {
+                processedIndices.add(vertexIndex); // Mark as processed
+
+                // Calculate world position
+                vertex.fromBufferAttribute(positionAttribute, vertexIndex);
+                vertex.applyMatrix4(mesh.matrixWorld);
+
+                // Store plain object for context
+                vertexDataForContext.push({
+                    index: vertexIndex,
+                    position: { x: vertex.x, y: vertex.y, z: vertex.z }
+                });
+            }
+        }
+
+        // --- 3. Store Data in Context ---
+        console.log(`Storing ${vertexDataForContext.length} grouped vertex data points in context.`);
+        storeGroupedVertexData(vertexDataForContext);
+
+        console.log("Storing mesh geometry in context.");
+        storeModelGeometry(mesh.geometry); // Store the geometry
+
+        // --- 4. Navigate ---
+        console.log("Navigating to animation page...");
         router.push('/animation');
     };
 

@@ -48,25 +48,54 @@ function AttributeSetter({ targetMeshRef, selectedIndices, onAttributeSetSuccess
         setIsProcessing(true);
 
         try {
-            // --- Prepare Attribute Data ---
-            const geometry = mesh.geometry;
-            const vertexCount = geometry.attributes.position.count;
-            const attributeArray = new Float32Array(vertexCount).fill(0.0);
+            // --- 1. Update mesh.userData.vertexGroups (NEW) ---
+            if (!mesh.userData) { mesh.userData = {}; } // Ensure userData exists
+            mesh.userData.vertexGroups = mesh.userData.vertexGroups || {}; // Initialize if needed
 
             selectedIndices.forEach(index => {
-                if (index < vertexCount) {
-                    attributeArray[index] = 1.0;
+                // Ensure the index is valid before using it
+                if (index < mesh.geometry.attributes.position.count) {
+                    mesh.userData.vertexGroups[index] = mesh.userData.vertexGroups[index] || []; // Initialize array for this index if needed
+                    // Add the group name if it's not already there
+                    if (!mesh.userData.vertexGroups[index].includes(sanitizedName)) {
+                        mesh.userData.vertexGroups[index].push(sanitizedName);
+                    }
+                } else {
+                    console.warn(`AttributeSetter: Index ${index} out of bounds, skipping for userData.`);
                 }
             });
+            console.log(`Updated mesh.userData.vertexGroups for ${selectedIndices.size} vertices with group "${sanitizedName}".`);
 
-            // --- Create and Set Attribute ---
-            const bufferAttribute = new THREE.BufferAttribute(attributeArray, 1);
-            geometry.setAttribute(finalAttributeName, bufferAttribute);
 
-            console.log(`Attribute '${finalAttributeName}' set on geometry. Marked ${selectedIndices.size} vertices.`);
-            alert(`Attribute '${finalAttributeName}' created successfully!`);
+            // --- 2. Prepare and Set Geometry Attribute (Optional - Keep if needed elsewhere) ---
+            const geometry = mesh.geometry;
+            const vertexCount = geometry.attributes.position.count;
+            // Check if this specific attribute already exists
+            let bufferAttribute;
+            if (geometry.attributes[finalAttributeName]) {
+                bufferAttribute = geometry.attributes[finalAttributeName];
+                // Reset relevant parts to 0 before setting new 1s? Or just overwrite? Overwriting is simpler.
+                console.log(`Attribute '${finalAttributeName}' already exists, updating...`);
+            } else {
+                // Create new attribute if it doesn't exist
+                const attributeArray = new Float32Array(vertexCount).fill(0.0);
+                bufferAttribute = new THREE.BufferAttribute(attributeArray, 1);
+                geometry.setAttribute(finalAttributeName, bufferAttribute);
+                console.log(`Attribute '${finalAttributeName}' created.`);
+            }
+
+            // Set 1.0 for selected vertices in the geometry attribute
+            selectedIndices.forEach(index => {
+                if (index < vertexCount) {
+                    bufferAttribute.setX(index, 1.0); // Set value for the vertex index
+                }
+            });
+            bufferAttribute.needsUpdate = true; // Mark the attribute as needing update
+            console.log(`Geometry attribute '${finalAttributeName}' updated.`);
+
 
             // --- Cleanup & Callback ---
+            setFeedback(`Group "${sanitizedName}" set for ${selectedIndices.size} vertices.`); // Update feedback
             setAttributeName('');
             if (onAttributeSetSuccess) {
                 onAttributeSetSuccess();
@@ -76,8 +105,9 @@ function AttributeSetter({ targetMeshRef, selectedIndices, onAttributeSetSuccess
             setTimeout(() => setFeedback(''), 3000);
 
         } catch (error) {
-            console.error("Error setting attribute:", error);
-            alert(`An error occurred while setting the attribute: ${error.message}`);
+            console.error("Error setting attribute/group:", error); // Updated log message
+            alert(`An error occurred while setting the group/attribute: ${error.message}`);
+            setFeedback(`Error: ${error.message}`); // Show error feedback
         } finally {
             setIsProcessing(false);
         }
@@ -129,9 +159,10 @@ function AttributeSetter({ targetMeshRef, selectedIndices, onAttributeSetSuccess
                             transition: 'background 0.3s ease'
                         }}
                     >
-                        {isProcessing ? 'Processing...' : 'Set Group Attribute'}
+                        {isProcessing ? 'Processing...' : 'Set Group'}
                     </button>
                 </div>
+                {feedback && <p style={{ marginTop: '10px', color: feedback.startsWith('Error') ? '#f56565' : '#90cdf4' }}>{feedback}</p>}
             </div>
         </Html>
     );

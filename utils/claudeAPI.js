@@ -1,10 +1,17 @@
+// You can remove the entire contents of this file if
+// getJointLocationsFromClaude was its only export and
+// it's no longer called directly from the frontend.
+
+// Or, comment out the function if you might reuse parts later:
+/*
 import * as THREE from 'three';
 
 // --- IMPORTANT ---
 // Replace this placeholder with your actual Claude API key.
 // Consider using environment variables or a secure configuration method.
 // DO NOT COMMIT YOUR API KEY DIRECTLY INTO THE CODE.
-const CLAUDE_API_KEY = 'YOUR_CLAUDE_API_KEY_HERE'; // <-- Replace this securely
+// Read the NEXT_PUBLIC_ prefixed variable
+const CLAUDE_API_KEY = process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY || ""; // <-- Use NEXT_PUBLIC_ prefix
 
 // The specific Anthropic API endpoint you are using
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages'; // Example endpoint, verify the correct one
@@ -20,8 +27,8 @@ const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages'; // Example endpo
  * @throws {Error} If the API request fails or returns an error status.
  */
 export async function getJointLocationsFromClaude(sampledVertices, animationPrompt) {
-    if (!CLAUDE_API_KEY || CLAUDE_API_KEY === 'YOUR_CLAUDE_API_KEY_HERE') {
-        console.error("Claude API Key is not configured. Please set it in utils/claudeAPI.js");
+    if (!CLAUDE_API_KEY) { // Simplified check: if it's empty or undefined
+        console.error("Claude API Key (NEXT_PUBLIC_ANTHROPIC_API_KEY) is not configured. Please set it in your .env file and restart the server.");
         throw new Error("Claude API Key not configured.");
     }
     if (!Array.isArray(sampledVertices)) {
@@ -74,7 +81,7 @@ Suggest the 3D joint locations as a JSON array of {x, y, z} objects based on the
             headers: {
                 'Content-Type': 'application/json',
                 'x-api-key': CLAUDE_API_KEY,
-                'anthropic-version': '2023-06-01' // Use the required API version
+                'anthropic-version': '2023-06-01' // <-- Required header
             },
             body: JSON.stringify(requestBody)
         });
@@ -119,4 +126,7 @@ Suggest the 3D joint locations as a JSON array of {x, y, z} objects based on the
         console.error("Error calling Claude API:", error);
         throw error; // Re-throw the error for the caller to handle
     }
-} 
+}
+*/
+
+// It's often cleaner to just delete the file if it becomes empty. 
