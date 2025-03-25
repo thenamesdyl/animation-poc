@@ -1,0 +1,5 @@
+This is our current plan. We are making this project with threejs/javascript:
+
+First the user selects the vertices they want to animate -> raycast unto the vertices -> set the attribute in threejs -> user prompts for the animation -> sample vertices of user selection -> plug into claude 3.7 to get rough location of all the joints -> create the joints from the array of joint positions and apply to the mesh -> generate code for the animations to those bones with claude 3.7 (allow user to look at potentially) -> export glb with animation back to user
+
+We are not implementing anything yet. Just creating the project. Include package.json etc. Create maybe a sample file. Use parcel for bundling.
